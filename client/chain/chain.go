@@ -447,6 +447,9 @@ func (c *chainClient) Close() {
 	if c.conn != nil {
 		c.conn.Close()
 	}
+	if c.ctx.Client != nil {
+		c.ctx.Client.Stop()
+	}
 }
 
 func (c *chainClient) GetBankBalances(ctx context.Context, address string) (*banktypes.QueryAllBalancesResponse, error) {
