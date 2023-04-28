@@ -132,6 +132,8 @@ type ChainClient interface {
 	GetTx(ctx context.Context, txHash eth.Hash) (*txtypes.GetTxResponse, error)
 
 	Close()
+
+	SyncNonce()
 }
 
 type chainClient struct {
@@ -265,7 +267,7 @@ func NewChainClient(
 	return cc, nil
 }
 
-func (c *chainClient) syncNonce() {
+func (c *chainClient) SyncNonce() {
 	num, seq, err := c.txFactory.AccountRetriever().GetAccountNumberSequence(c.ctx, c.ctx.GetFromAddress())
 	if err != nil {
 		c.logger.WithError(err).Errorln("failed to get account seq")
@@ -485,10 +487,10 @@ func (c *chainClient) SyncBroadcastMsg(msgs ...sdk.Msg) (*txtypes.BroadcastTxRes
 
 	if err != nil {
 		if strings.Contains(err.Error(), "account sequence mismatch") {
-			c.syncNonce()
+			c.SyncNonce()
 			c.txFactory = c.txFactory.WithSequence(c.accSeq)
 			c.txFactory = c.txFactory.WithAccountNumber(c.accNum)
-			log.Debugln("retrying broadcastTx with nonce", c.accSeq)
+			log.Infoln("retrying broadcastTx with nonce", c.accSeq)
 			res, err = c.broadcastTx(c.ctx, c.txFactory, true, msgs...)
 		}
 		if err != nil {
@@ -549,10 +551,10 @@ func (c *chainClient) AsyncBroadcastMsg(msgs ...sdk.Msg) (*txtypes.BroadcastTxRe
 	res, err := c.broadcastTx(c.ctx, c.txFactory, false, msgs...)
 	if err != nil {
 		if strings.Contains(err.Error(), "account sequence mismatch") {
-			c.syncNonce()
+			c.SyncNonce()
 			c.txFactory = c.txFactory.WithSequence(c.accSeq)
 			c.txFactory = c.txFactory.WithAccountNumber(c.accNum)
-			log.Debugln("retrying broadcastTx with nonce", c.accSeq)
+			log.Infoln("retrying broadcastTx with nonce", c.accSeq)
 			res, err = c.broadcastTx(c.ctx, c.txFactory, false, msgs...)
 		}
 		if err != nil {
@@ -816,10 +818,10 @@ func (c *chainClient) runBatchBroadcast() {
 		res, err := c.broadcastTx(c.ctx, c.txFactory, true, toSubmit...)
 		if err != nil {
 			if strings.Contains(err.Error(), "account sequence mismatch") {
-				c.syncNonce()
+				c.SyncNonce()
 				c.txFactory = c.txFactory.WithSequence(c.accSeq)
 				c.txFactory = c.txFactory.WithAccountNumber(c.accNum)
-				log.Debugln("retrying broadcastTx with nonce", c.accSeq)
+				log.Infoln("retrying broadcastTx with nonce", c.accSeq)
 				res, err = c.broadcastTx(c.ctx, c.txFactory, true, toSubmit...)
 			}
 			if err != nil {
