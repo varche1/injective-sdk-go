@@ -74,6 +74,7 @@ type ChainClient interface {
 	FromAddress() sdk.AccAddress
 	QueryClient() *grpc.ClientConn
 	ClientContext() client.Context
+	CometbftClient() rpcclient.Client
 	// return account number and sequence without increasing sequence
 	GetAccNonce() (accNum uint64, accSeq uint64)
 
@@ -437,6 +438,10 @@ func (c *chainClient) QueryClient() *grpc.ClientConn {
 
 func (c *chainClient) ClientContext() client.Context {
 	return c.ctx
+}
+
+func (c *chainClient) CometbftClient() rpcclient.Client {
+	return c.cometbftClient
 }
 
 func (c *chainClient) CanSignTransactions() bool {
