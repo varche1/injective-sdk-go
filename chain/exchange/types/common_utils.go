@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -108,18 +108,18 @@ func IsNonceDerivedSubaccountID(subaccountID string) bool {
 func CheckValidSubaccountIDOrNonce(sender sdk.AccAddress, subaccountId string) error {
 	if IsNonceDerivedSubaccountID(subaccountId) {
 		if _, err := GetNonceDerivedSubaccountID(sender, subaccountId); err != nil {
-			return sdkerrors.Wrap(ErrBadSubaccountID, subaccountId)
+			return errors.Wrap(ErrBadSubaccountID, subaccountId)
 		}
 		return nil
 	}
 
 	subaccountAddress, ok := IsValidSubaccountID(subaccountId)
 	if !ok {
-		return sdkerrors.Wrap(ErrBadSubaccountID, subaccountId)
+		return errors.Wrap(ErrBadSubaccountID, subaccountId)
 	}
 
 	if !bytes.Equal(subaccountAddress.Bytes(), sender.Bytes()) {
-		return sdkerrors.Wrap(ErrBadSubaccountID, subaccountId)
+		return errors.Wrap(ErrBadSubaccountID, subaccountId)
 	}
 	return nil
 }
@@ -244,6 +244,10 @@ func GetNonceDerivedSubaccountID(sender sdk.AccAddress, subaccountId string) (co
 func GetSubaccountIDOrDeriveFromNonce(sender sdk.AccAddress, subaccountId string) (common.Hash, error) {
 	if IsNonceDerivedSubaccountID(subaccountId) {
 		return GetNonceDerivedSubaccountID(sender, subaccountId)
+	}
+
+	if !IsHexHash(subaccountId) {
+		return common.Hash{}, errors.Wrap(ErrBadSubaccountID, subaccountId)
 	}
 
 	return common.HexToHash(subaccountId), nil

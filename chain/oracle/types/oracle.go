@@ -3,9 +3,9 @@ package types
 import (
 	"strings"
 
+	"cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
-	"github.com/gogo/protobuf/proto"
+	"github.com/cosmos/gogoproto/proto"
 )
 
 const QuoteUSD = "USD"
@@ -33,7 +33,7 @@ func GetOracleType(oracleTypeStr string) (OracleType, error) {
 	case "pyth":
 		oracleType = OracleType_Pyth
 	default:
-		return OracleType_Band, sdkerrors.Wrapf(ErrUnsupportedOracleType, "%s", oracleTypeStr)
+		return OracleType_Band, errors.Wrapf(ErrUnsupportedOracleType, "%s", oracleTypeStr)
 	}
 	return oracleType, nil
 }
@@ -107,4 +107,14 @@ func (s SymbolPriceTimestamps) GetTimestamp(oracleType OracleType, symbol string
 // CheckPriceFeedThreshold returns true if the newPrice has changed beyond 100x or less than 1% of the last price
 func CheckPriceFeedThreshold(lastPrice, newPrice sdk.Dec) bool {
 	return newPrice.GT(lastPrice.Mul(sdk.NewDec(100))) || newPrice.LT(lastPrice.Quo(sdk.NewDec(100)))
+}
+
+func IsLegacySchemeOracleScript(scriptID int64, params BandIBCParams) bool {
+	for _, id := range params.LegacyOracleIds {
+		if id == scriptID {
+			return true
+		}
+	}
+
+	return false
 }

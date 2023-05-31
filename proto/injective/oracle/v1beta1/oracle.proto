@@ -35,17 +35,23 @@ message OracleInfo {
 
 message ChainlinkPriceState {
   string feed_id = 1;
-  string answer = 2 [(gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Dec", (gogoproto.nullable) = false];
+  string answer = 2 [
+    (gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Dec",
+    (gogoproto.nullable) = false
+  ];
   uint64 timestamp = 3;
-  PriceState price_state = 4 [(gogoproto.nullable) = false];
+  PriceState price_state = 4 [ (gogoproto.nullable) = false ];
 }
 
 message BandPriceState {
   string symbol = 1;
-  string rate = 2 [(gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Int", (gogoproto.nullable) = false];
+  string rate = 2 [
+    (gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Int",
+    (gogoproto.nullable) = false
+  ];
   uint64 resolve_time = 3;
   uint64 request_ID = 4;
-  PriceState price_state = 5 [(gogoproto.nullable) = false];
+  PriceState price_state = 5 [ (gogoproto.nullable) = false ];
 }
 
 message PriceFeedState {
@@ -76,7 +82,10 @@ message PriceFeedInfo {
 }
 
 message PriceFeedPrice {
-  string price = 1 [(gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Dec", (gogoproto.nullable) = false];
+  string price = 1 [
+    (gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Dec",
+    (gogoproto.nullable) = false
+  ];
 }
 
 message CoinbasePriceState {
@@ -89,31 +98,47 @@ message CoinbasePriceState {
   // the value of the price scaled by 1e6
   uint64 value = 4;
   // the price state
-  PriceState price_state = 5 [(gogoproto.nullable) = false];
+  PriceState price_state = 5 [ (gogoproto.nullable) = false ];
 }
 
 message PriceState {
-  string price = 1 [(gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Dec", (gogoproto.nullable) = false];
+  string price = 1 [
+    (gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Dec",
+    (gogoproto.nullable) = false
+  ];
 
-  string cumulative_price = 2 [(gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Dec", (gogoproto.nullable) = false];
+  string cumulative_price = 2 [
+    (gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Dec",
+    (gogoproto.nullable) = false
+  ];
 
   int64 timestamp = 3;
 }
 
 message PythPriceState {
   string price_id = 1;
-  string ema_price = 2 [(gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Dec", (gogoproto.nullable) = false];
-  string ema_conf = 3 [(gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Dec", (gogoproto.nullable) = false];
-  string conf = 4 [(gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Dec", (gogoproto.nullable) = false];
+  string ema_price = 2 [
+    (gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Dec",
+    (gogoproto.nullable) = false
+  ];
+  string ema_conf = 3 [
+    (gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Dec",
+    (gogoproto.nullable) = false
+  ];
+  string conf = 4 [
+    (gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Dec",
+    (gogoproto.nullable) = false
+  ];
   uint64 publish_time = 5;
-  PriceState price_state = 6 [(gogoproto.nullable) = false];
+  PriceState price_state = 6 [ (gogoproto.nullable) = false ];
 }
 
 message BandOracleRequest {
   // Unique Identifier for band ibc oracle request
   uint64 request_id = 1;
 
-  // OracleScriptID is the unique identifier of the oracle script to be executed.
+  // OracleScriptID is the unique identifier of the oracle script to be
+  // executed.
   int64 oracle_script_id = 2;
 
   // Symbols is the list of symbols to prepare in the calldata
@@ -128,13 +153,20 @@ message BandOracleRequest {
   // cost of liveness.
   uint64 min_count = 5;
 
-  // FeeLimit is the maximum tokens that will be paid to all data source providers.
-  repeated cosmos.base.v1beta1.Coin fee_limit = 6 [(gogoproto.nullable) = false, (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins"];
+  // FeeLimit is the maximum tokens that will be paid to all data source
+  // providers.
+  repeated cosmos.base.v1beta1.Coin fee_limit = 6 [
+    (gogoproto.nullable) = false,
+    (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins"
+  ];
 
   // PrepareGas is amount of gas to pay to prepare raw requests
   uint64 prepare_gas = 7;
   // ExecuteGas is amount of gas to reserve for executing
   uint64 execute_gas = 8;
+  // MinSourceCount is the minimum number of data sources that must be used by
+  // each validator
+  uint64 min_source_count = 9;
 }
 
 message BandIBCParams {
@@ -149,8 +181,9 @@ message BandIBCParams {
   string ibc_version = 4;
   // band IBC portID
   string ibc_port_id = 5;
+  //  legacy oracle scheme ids
+  repeated int64 legacy_oracle_ids = 6;
 }
-
 
 message SymbolPriceTimestamp {
   OracleType oracle = 1;
@@ -178,20 +211,24 @@ message PriceRecord {
   ];
 }
 
-// MetadataStatistics refers to the metadata summary statistics of the historical sample considered
+// MetadataStatistics refers to the metadata summary statistics of the
+// historical sample considered
 message MetadataStatistics {
-  // GroupCount refers to the number of groups used. Equals RecordsSampleSize if no grouping is used
+  // GroupCount refers to the number of groups used. Equals RecordsSampleSize if
+  // no grouping is used
   uint32 group_count = 1;
   // RecordsSampleSize refers to the total number of records used.
   uint32 records_sample_size = 2;
   // Mean refers to the arithmetic mean
-  // For trades, the mean is the VWAP computed over the grouped trade records ∑ (price * quantity) / ∑ quantity
-  // For oracle prices, the mean is computed over the price records ∑ (price) / prices_count
+  // For trades, the mean is the VWAP computed over the grouped trade records ∑
+  // (price * quantity) / ∑ quantity For oracle prices, the mean is computed
+  // over the price records ∑ (price) / prices_count
   string mean = 3 [
     (gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Dec",
     (gogoproto.nullable) = false
   ];
-  // TWAP refers to the time-weighted average price which equals ∑ (price_i * ∆t_i) / ∑ ∆t_i where ∆t_i = t_i - t_{i-1}
+  // TWAP refers to the time-weighted average price which equals ∑ (price_i *
+  // ∆t_i) / ∑ ∆t_i where ∆t_i = t_i - t_{i-1}
   string twap = 4 [
     (gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Dec",
     (gogoproto.nullable) = false
@@ -217,30 +254,14 @@ message MetadataStatistics {
   ];
 }
 
-
 message PriceAttestation {
-  string product_id = 1;
-  bytes price_id = 2;
+  string price_id = 1;
   // MaxPrice refers to the largest individual raw price considered
-  int64 price = 3;
-  uint64 conf = 4;
-  int32 expo = 5;
-  int64 ema_price = 6;
-  uint64 ema_conf = 7;
-  PythStatus status = 8;
-  uint32 num_publishers = 9;
-  uint32 max_num_publishers = 10;
-  int64 attestation_time = 11;
-  int64 publish_time = 12;
-}
-
-enum PythStatus {
-  // The price feed is not currently updating for an unknown reason.
-  Unknown = 0;
-  // The price feed is updating as expected.
-  Trading = 1;
-  // The price feed is not currently updating because trading in the product has been halted.
-  Halted = 2;
-  // The price feed is not currently updating because an auction is setting the price.
-  Auction = 3;
+  int64 price = 2;
+  uint64 conf = 3;
+  int32 expo = 4;
+  int64 ema_price = 5;
+  uint64 ema_conf = 6;
+  int32 ema_expo = 7;
+  int64 publish_time = 8;
 }
