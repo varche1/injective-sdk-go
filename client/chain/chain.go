@@ -109,6 +109,8 @@ type ChainClient interface {
 
 	GetSubAccountNonce(ctx context.Context, subaccountId eth.Hash) (*exchangetypes.QuerySubaccountTradeNonceResponse, error)
 	GetFeeDiscountInfo(ctx context.Context, account string) (*exchangetypes.QueryFeeDiscountAccountInfoResponse, error)
+
+	UpdateSubaccountNonceFromChain() error
 	ComputeOrderHashes(spotOrders []exchangetypes.SpotOrder, derivativeOrders []exchangetypes.DerivativeOrder) (OrderHashes, error)
 
 	SpotOrder(defaultSubaccountID eth.Hash, network common.Network, d *SpotOrderData) *exchangetypes.SpotOrder
@@ -133,7 +135,8 @@ type ChainClient interface {
 
 	SetGasWanted(gasWanted uint64)
 
-	GetTx(ctx context.Context, txHash eth.Hash) (*txtypes.GetTxResponse, error)
+	// get tx from chain node
+	GetTx(ctx context.Context, txHash string) (*txtypes.GetTxResponse, error)
 
 	Close()
 
@@ -152,6 +155,9 @@ type chainClient struct {
 	msgC        chan sdk.Msg
 	syncMux     *sync.Mutex
 
+	cancelCtx context.Context
+	cancelFn  func()
+
 	accNum    uint64
 	accSeq    uint64
 	gasWanted uint64
@@ -167,6 +173,7 @@ type chainClient struct {
 	bankQueryClient     banktypes.QueryClient
 	authzQueryClient    authztypes.QueryClient
 	wasmQueryClient     wasmtypes.QueryClient
+	subaccountToNonce   map[ethcommon.Hash]uint32
 
 	closed  int64
 	canSign bool
@@ -225,6 +232,7 @@ func NewChainClient(
 		}
 	}
 
+	cancelCtx, cancelFn := context.WithCancel(context.Background())
 	// build client
 	cc := &chainClient{
 		ctx:  ctx,
@@ -241,6 +249,8 @@ func NewChainClient(
 		syncMux:   new(sync.Mutex),
 		msgC:      make(chan sdk.Msg, msgCommitBatchSizeLimit),
 		doneC:     make(chan bool, 1),
+		cancelCtx: cancelCtx,
+		cancelFn:  cancelFn,
 
 		sessionEnabled: stickySessionEnabled,
 
@@ -251,6 +261,7 @@ func NewChainClient(
 		bankQueryClient:     banktypes.NewQueryClient(conn),
 		authzQueryClient:    authztypes.NewQueryClient(conn),
 		wasmQueryClient:     wasmtypes.NewQueryClient(conn),
+		subaccountToNonce:   make(map[ethcommon.Hash]uint32),
 	}
 
 	if cc.canSign {
@@ -267,7 +278,12 @@ func NewChainClient(
 	}
 
 	// create file if not exist
-	os.OpenFile(defaultChainCookieName, os.O_RDONLY|os.O_CREATE, 0666)
+	cookieFile, err := os.OpenFile(defaultChainCookieName, os.O_RDONLY|os.O_CREATE, 0666)
+	if err != nil {
+		cc.logger.Errorln(err)
+	} else {
+		defer cookieFile.Close()
+	}
 
 	// attempt to load from disk
 	data, err := os.ReadFile(defaultChainCookieName)
@@ -275,7 +291,7 @@ func NewChainClient(
 		cc.logger.Errorln(err)
 	} else {
 		cc.sessionCookie = string(data)
-		cc.logger.Infoln("chain session cookie loaded from disk")
+		cc.logger.Debugln("chain session cookie loaded from disk")
 	}
 
 	return cc, nil
@@ -297,15 +313,23 @@ func (c *chainClient) SyncNonce() {
 }
 
 func (c *chainClient) syncTimeoutHeight() {
+	t := time.NewTicker(defaultTimeoutHeightSyncInterval)
+	defer t.Stop()
+
 	for {
-		ctx := context.Background()
-		block, err := c.ctx.Client.Block(ctx, nil)
+		block, err := c.ctx.Client.Block(c.cancelCtx, nil)
 		if err != nil {
 			c.logger.WithError(err).Errorln("failed to get current block")
 			return
 		}
 		c.txFactory.WithTimeoutHeight(uint64(block.Block.Height) + defaultTimeoutHeight)
-		time.Sleep(defaultTimeoutHeightSyncInterval)
+
+		select {
+		case <-c.cancelCtx.Done():
+			return
+		case <-t.C:
+			continue
+		}
 	}
 }
 
@@ -463,9 +487,17 @@ func (c *chainClient) Close() {
 	if atomic.CompareAndSwapInt64(&c.closed, 0, 1) {
 		close(c.msgC)
 	}
+
+	if c.cancelFn != nil {
+		c.cancelFn()
+	}
 	<-c.doneC
 	if c.conn != nil {
 		c.conn.Close()
+	}
+
+	if c.cometbftClient != nil {
+		c.cometbftClient.Stop()
 	}
 }
 
@@ -510,7 +542,7 @@ func (c *chainClient) SyncBroadcastMsg(msgs ...sdk.Msg) (*txtypes.BroadcastTxRes
 		}
 		if err != nil {
 			resJSON, _ := json.MarshalIndent(res, "", "\t")
-			c.logger.WithField("size", len(msgs)).WithError(err).Errorln("failed to commit msg batch:", string(resJSON))
+			c.logger.WithField("size", len(msgs)).WithError(err).Errorln("failed synchronously broadcast messages:", string(resJSON))
 			return nil, err
 		}
 	}
@@ -574,7 +606,7 @@ func (c *chainClient) AsyncBroadcastMsg(msgs ...sdk.Msg) (*txtypes.BroadcastTxRe
 		}
 		if err != nil {
 			resJSON, _ := json.MarshalIndent(res, "", "\t")
-			c.logger.WithField("size", len(msgs)).WithError(err).Errorln("failed to commit msg batch:", string(resJSON))
+			c.logger.WithField("size", len(msgs)).WithError(err).Errorln("failed to asynchronously broadcast messagess:", string(resJSON))
 			return nil, err
 		}
 	}
@@ -660,8 +692,6 @@ func (c *chainClient) SyncBroadcastSignedTx(txBytes []byte) (*txtypes.BroadcastT
 				if errRes := client.CheckTendermintError(err, txBytes); errRes != nil {
 					return &txtypes.BroadcastTxResponse{TxResponse: errRes}, err
 				}
-
-				// log.WithError(err).Warningln("Tx Error for Hash:", res.TxHash)
 
 				t.Reset(defaultBroadcastStatusPoll)
 				continue
@@ -751,8 +781,8 @@ func (c *chainClient) broadcastTx(
 	}
 
 	req := txtypes.BroadcastTxRequest{
-		txBytes,
-		txtypes.BroadcastMode_BROADCAST_MODE_SYNC,
+		TxBytes: txBytes,
+		Mode:    txtypes.BroadcastMode_BROADCAST_MODE_SYNC,
 	}
 	// use our own client to broadcast tx
 	var header metadata.MD
@@ -780,8 +810,6 @@ func (c *chainClient) broadcastTx(
 				if errRes := client.CheckTendermintError(err, txBytes); errRes != nil {
 					return &txtypes.BroadcastTxResponse{TxResponse: errRes}, err
 				}
-
-				// log.WithError(err).Warningln("Tx Error for Hash:", res.TxHash)
 
 				t.Reset(defaultBroadcastStatusPoll)
 				continue
@@ -841,16 +869,16 @@ func (c *chainClient) runBatchBroadcast() {
 			}
 			if err != nil {
 				resJSON, _ := json.MarshalIndent(res, "", "\t")
-				c.logger.WithField("size", len(toSubmit)).WithError(err).Errorln("failed to commit msg batch:", string(resJSON))
+				c.logger.WithField("size", len(toSubmit)).WithError(err).Errorln("failed to broadcast messages batch:", string(resJSON))
 				return
 			}
 		}
 
 		if res.TxResponse.Code != 0 {
 			err = errors.Errorf("error %d (%s): %s", res.TxResponse.Code, res.TxResponse.Codespace, res.TxResponse.RawLog)
-			log.WithField("txHash", res.TxResponse.TxHash).WithError(err).Errorln("failed to commit msg batch")
+			log.WithField("txHash", res.TxResponse.TxHash).WithError(err).Errorln("failed to broadcast messages batch")
 		} else {
-			log.WithField("txHash", res.TxResponse.TxHash).Debugln("msg batch committed successfully at height", res.TxResponse.Height)
+			log.WithField("txHash", res.TxResponse.TxHash).Debugln("msg batch broadcasted successfully at height", res.TxResponse.Height)
 		}
 
 		c.accSeq++
