@@ -1319,14 +1319,10 @@ func (c *chainClient) SetGasWanted(gasWanted uint64) {
 	c.gasWanted = gasWanted
 }
 
-func (c *chainClient) GetTx(ctx context.Context, txHash eth.Hash) (*txtypes.GetTxResponse, error) {
-	req := txtypes.GetTxRequest{
-		Hash: strings.TrimPrefix(txHash.Hex(), "0x"),
-	}
-
-	var header metadata.MD
-	ctx = c.getCookie(ctx)
-	return c.txClient.GetTx(ctx, &req, grpc.Header(&header))
+func (c *chainClient) GetTx(ctx context.Context, txHash string) (*txtypes.GetTxResponse, error) {
+	return c.txClient.GetTx(ctx, &txtypes.GetTxRequest{
+		Hash: txHash,
+	})
 }
 
 type DerivativeOrderData struct {
