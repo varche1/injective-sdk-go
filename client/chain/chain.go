@@ -759,7 +759,7 @@ func (c *chainClient) broadcastTx(
 	ctx = c.getCookie(ctx)
 	now := time.Now()
 	res, err := c.txClient.BroadcastTx(ctx, &req, grpc.Header(&header))
-	fmt.Println("BroadcastTx sdk duration", time.Since(now).String())
+	fmt.Println("BroadcastTx sdk call duration", time.Since(now).String())
 	if !await || err != nil {
 		return res, err
 	}
